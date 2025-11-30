@@ -41,7 +41,6 @@ export async function POST(request: NextRequest) {
       depositNetwork.toLowerCase() === settleNetwork.toLowerCase()
 
     if (isSamePair) {
-      console.log("[v0] Same-pair blocked:", { depositCoin, depositNetwork, settleCoin, settleNetwork })
       return NextResponse.json({
         available: false,
         samePair: true,
@@ -53,7 +52,8 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const pairUrl = `https://sideshift.ai/api/v2/pair/${depositCoin}-${depositNetwork}/${settleCoin}-${settleNetwork}?amount=${amount}${affiliateId ? `&affiliateId=${affiliateId}` : ""}`
+    // The amount parameter affects the rate due to network fees, causing incorrect limit display
+    const pairUrl = `https://sideshift.ai/api/v2/pair/${depositCoin}-${depositNetwork}/${settleCoin}-${settleNetwork}${affiliateId ? `?affiliateId=${affiliateId}` : ""}`
 
     console.log("[v0] Validating pair:", pairUrl)
 
@@ -67,7 +67,6 @@ export async function POST(request: NextRequest) {
       const errorText = await response.text()
       console.error("[v0] SideShift pair error:", errorText)
 
-      // Check for geo-blocking
       if (errorText.includes("access denied") || errorText.includes("geo")) {
         return NextResponse.json(
           {
@@ -90,81 +89,76 @@ export async function POST(request: NextRequest) {
 
     const data = await response.json()
 
-    console.log("[v0] SideShift pair response:", {
-      min: data.min,
-      max: data.max,
-      rate: data.rate,
-      depositCoin: data.depositCoin,
-      settleCoin: data.settleCoin,
-    })
+    console.log("[v0] SideShift pair response:", JSON.stringify(data, null, 2))
 
     const min = Number.parseFloat(data.min || "0")
     const max = Number.parseFloat(data.max || "999999")
     const rate = Number.parseFloat(data.rate || "0")
 
-    let isWithinRange = true
-    let estimatedDepositAmount = 0
-
-    // SideShift rate format: 1 depositCoin = rate settleCoin
-    // So if depositCoin is ETH and settleCoin is USDC:
-    //   rate = 3600 means 1 ETH = 3600 USDC
+    // For ETH→USDC: rate=3600 means 1 ETH = 3600 USDC
     // min/max are in DEPOSIT coin units
-    // To get USD value: multiply by rate (since settle is USDC which is ~$1)
+    // minUsd = min * rate, maxUsd = max * rate (when settle is stablecoin)
 
     const isSettleStablecoin = ["USDC", "USDT", "DAI", "BUSD", "TUSD", "FRAX"].includes(settleCoin.toUpperCase())
 
-    // Calculate USD values correctly
-    // min/max are in deposit coin units, rate is depositCoin->settleCoin
-    // So: minUsd = min * rate, maxUsd = max * rate (if settle is stablecoin)
     let minUsd: number
     let maxUsd: number
 
-    if (isSettleStablecoin) {
-      // If settling to stablecoin, the settle amount IS the USD value
+    if (rate > 0) {
+      // rate is "1 depositCoin = X settleCoin"
+      // For stablecoins, settleCoin ≈ USD
       minUsd = min * rate
       maxUsd = max * rate
     } else {
-      // If settling to non-stablecoin, we need to estimate USD differently
-      // For now, just use the settle amount as an approximation
-      minUsd = min * rate
-      maxUsd = max * rate
+      minUsd = 0
+      maxUsd = 999999
     }
 
     console.log("[v0] Calculated limits:", {
       min,
       max,
       rate,
-      minUsd,
-      maxUsd,
+      minUsd: minUsd.toFixed(2),
+      maxUsd: maxUsd.toFixed(2),
       isSettleStablecoin,
       settleCoin,
     })
 
-    // Rate is: 1 DepositCoin = X SettleCoin
-    // We assume 'amount' is in SettleCoin units (e.g. USD/USDC)
+    // User wants to pay `amount` in USD, we need depositAmount = amount / rate
+    let isWithinRange = true
+    let estimatedDepositAmount = 0
+
     if (rate > 0 && amount) {
       estimatedDepositAmount = amount / rate
-      // Add a small buffer (1%) for rate fluctuations
+
+      // Check with 1% buffer for rate fluctuations
       isWithinRange = estimatedDepositAmount >= min * 0.99 && estimatedDepositAmount <= max * 1.01
 
       console.log("[v0] Amount validation:", {
-        amount,
-        estimatedDepositAmount,
-        min,
-        max,
+        requestedAmountUsd: amount,
+        estimatedDepositAmount: estimatedDepositAmount.toFixed(8),
+        minDeposit: min,
+        maxDeposit: max,
+        minUsd: minUsd.toFixed(2),
+        maxUsd: maxUsd.toFixed(2),
         isWithinRange,
       })
     }
 
+    let reason: string | undefined = undefined
+    if (!isWithinRange && rate > 0) {
+      if (estimatedDepositAmount < min) {
+        reason = `Minimum: $${minUsd.toFixed(2)}`
+      } else if (estimatedDepositAmount > max) {
+        reason = `Maximum: $${maxUsd.toFixed(2)}`
+      }
+    }
+
     return NextResponse.json({
       available: isWithinRange,
-      reason: !isWithinRange
-        ? estimatedDepositAmount < min
-          ? `Minimum: $${minUsd.toFixed(2)}`
-          : `Maximum: $${maxUsd.toFixed(2)}`
-        : undefined,
-      minUsd: minUsd,
-      maxUsd: maxUsd,
+      reason,
+      minUsd,
+      maxUsd,
       min: data.min,
       max: data.max,
       rate: data.rate,

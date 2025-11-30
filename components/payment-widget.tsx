@@ -413,7 +413,7 @@ export function PaymentWidget({
 
         setSelectedChain(parsed.selectedChain || "")
         setDepositAddress(parsed.depositAddress || "")
-        // setHasClickedPaid(parsed.hasClickedPaid || false)
+        setHasClickedPaid(parsed.hasClickedPaid || false) // Restore hasClickedPaid
         setRefundAddress(parsed.refundAddress || "")
         setRefundMemo(parsed.refundMemo || "") // Restore refundMemo
 
@@ -427,21 +427,21 @@ export function PaymentWidget({
   }, [sessionId, initialStatus])
 
   useEffect(() => {
-    if (depositAddress || selectedChain || refundAddress || refundMemo) {
-      // Include refundMemo
+    if (selectedChain || depositAddress || refundAddress || refundMemo) {
+      // Include refundMemo and hasClickedPaid
       localStorage.setItem(
         `payment_${sessionId}`,
         JSON.stringify({
           selectedChain,
           depositAddress,
-          // hasClickedPaid,
+          hasClickedPaid, // Save hasClickedPaid state
           refundAddress,
           refundMemo, // Save refundMemo
           timestamp: Date.now(),
         }),
       )
     }
-  }, [sessionId, selectedChain, depositAddress, hasClickedPaid, refundAddress, refundMemo]) // Add refundMemo dependency
+  }, [sessionId, selectedChain, depositAddress, hasClickedPaid, refundAddress, refundMemo]) // Add refundMemo and hasClickedPaid dependency
 
   useEffect(() => {
     if (!selectedChain || !sessionData?.amount) return
@@ -802,8 +802,21 @@ export function PaymentWidget({
       description: "Monitoring the blockchain for your deposit...",
     })
 
+    localStorage.setItem(
+      `payment_${sessionId}`,
+      JSON.stringify({
+        selectedChain,
+        depositAddress,
+        hasClickedPaid: true,
+        refundAddress,
+        refundMemo,
+      }),
+    )
+
     // Trigger immediate check via POST
     try {
+      console.log("[v0] Triggering manual payment check for session:", sessionId)
+
       const response = await fetch(`/api/widget/status/${sessionId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -811,6 +824,7 @@ export function PaymentWidget({
       })
 
       const data = await response.json()
+      console.log("[v0] Manual check response:", data)
 
       if (data.status && data.status !== status) {
         setStatus(data.status)
@@ -826,6 +840,11 @@ export function PaymentWidget({
             description: "Your payment has been processed successfully.",
           })
         }
+      } else {
+        toast({
+          title: "Monitoring Started",
+          description: data.message || "We're watching for your transaction. This may take a few minutes.",
+        })
       }
 
       // Start continuous polling
@@ -834,6 +853,10 @@ export function PaymentWidget({
       }
     } catch (e) {
       console.error("[v0] Failed to trigger check:", e)
+      toast({
+        title: "Monitoring Started",
+        description: "We're watching for your transaction. This may take a few minutes.",
+      })
       // Still start polling even if initial check fails
       setTimeout(checkPaymentStatus, 3000)
     } finally {
@@ -1134,8 +1157,15 @@ export function PaymentWidget({
     )
   })
 
+  // Restored original centered design with shield icon
   if (!isMounted) {
-    return null
+    return (
+      <div className="w-full max-w-md mx-auto p-4">
+        <Card className="h-[400px] flex items-center justify-center bg-card">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </Card>
+      </div>
+    )
   }
 
   if (isLoadingSession) {
