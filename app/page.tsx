@@ -359,9 +359,7 @@ window.location.href = widget_url;`}
                   SideShift.ai
                 </a>
               </p>
-              <p className="text-xs text-muted-foreground">
-                © {new Date().getFullYear()} CloaxPay. All rights reserved.
-              </p>
+              <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} CloaxPay</p>
             </div>
           </div>
         </div>
