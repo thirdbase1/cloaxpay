@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
 
+const STABLECOINS = ["USDC", "USDT", "DAI", "BUSD", "TUSD", "FRAX", "USDP", "GUSD", "LUSD", "SUSD", "PYUSD"]
+
 export async function POST(request: NextRequest) {
   try {
     const { depositCoin, depositNetwork, amount, affiliateId, sessionId } = await request.json()
@@ -52,7 +54,6 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // The amount parameter affects the rate due to network fees, causing incorrect limit display
     const pairUrl = `https://sideshift.ai/api/v2/pair/${depositCoin}-${depositNetwork}/${settleCoin}-${settleNetwork}${affiliateId ? `?affiliateId=${affiliateId}` : ""}`
 
     console.log("[v0] Validating pair:", pairUrl)
@@ -95,20 +96,63 @@ export async function POST(request: NextRequest) {
     const max = Number.parseFloat(data.max || "999999")
     const rate = Number.parseFloat(data.rate || "0")
 
-    // For ETH→USDC: rate=3600 means 1 ETH = 3600 USDC
-    // min/max are in DEPOSIT coin units
-    // minUsd = min * rate, maxUsd = max * rate (when settle is stablecoin)
+    // - rate means "1 depositCoin = X settleCoin"
+    // - min/max are in DEPOSIT coin units
+    //
+    // Case 1: Deposit is stablecoin (USDC→ETH): min/max are already in USD
+    // Case 2: Settle is stablecoin (ETH→USDC): minUsd = min * rate, maxUsd = max * rate
+    // Case 3: Neither is stablecoin (ETH→ETH): Need to fetch USD price
 
-    const isSettleStablecoin = ["USDC", "USDT", "DAI", "BUSD", "TUSD", "FRAX"].includes(settleCoin.toUpperCase())
+    const depositCoinUpper = depositCoin.toUpperCase()
+    const settleCoinUpper = settleCoin.toUpperCase()
+    const isDepositStablecoin = STABLECOINS.includes(depositCoinUpper)
+    const isSettleStablecoin = STABLECOINS.includes(settleCoinUpper)
 
     let minUsd: number
     let maxUsd: number
 
-    if (rate > 0) {
-      // rate is "1 depositCoin = X settleCoin"
-      // For stablecoins, settleCoin ≈ USD
+    if (isDepositStablecoin) {
+      // Deposit coin IS the stablecoin, so min/max are already in USD
+      minUsd = min
+      maxUsd = max
+      console.log("[v0] Deposit is stablecoin - using min/max directly as USD")
+    } else if (isSettleStablecoin && rate > 0) {
+      // Settle coin is stablecoin, so rate tells us USD value
+      // 1 depositCoin = rate settleCoin ≈ rate USD
       minUsd = min * rate
       maxUsd = max * rate
+      console.log("[v0] Settle is stablecoin - calculating: min*rate, max*rate")
+    } else if (rate > 0) {
+      // Neither is stablecoin (e.g., ETH→ETH cross-chain or ETH→BTC)
+      // We need to get the USD price of the deposit coin
+      // Fetch price from a simple API
+      try {
+        const priceResponse = await fetch(
+          `https://api.coingecko.com/api/v3/simple/price?ids=${getCoingeckoId(depositCoinUpper)}&vs_currencies=usd`,
+        )
+        if (priceResponse.ok) {
+          const priceData = await priceResponse.json()
+          const coinId = getCoingeckoId(depositCoinUpper)
+          const usdPrice = priceData[coinId]?.usd || 0
+          if (usdPrice > 0) {
+            minUsd = min * usdPrice
+            maxUsd = max * usdPrice
+            console.log(`[v0] Fetched ${depositCoinUpper} price: $${usdPrice}, minUsd: ${minUsd}, maxUsd: ${maxUsd}`)
+          } else {
+            // Fallback: assume rate approximates relative value
+            minUsd = 0
+            maxUsd = 999999
+          }
+        } else {
+          minUsd = 0
+          maxUsd = 999999
+        }
+      } catch (priceError) {
+        console.error("[v0] Price fetch error:", priceError)
+        // Fallback - don't show USD limits
+        minUsd = 0
+        maxUsd = 999999
+      }
     } else {
       minUsd = 0
       maxUsd = 999999
@@ -120,19 +164,37 @@ export async function POST(request: NextRequest) {
       rate,
       minUsd: minUsd.toFixed(2),
       maxUsd: maxUsd.toFixed(2),
+      isDepositStablecoin,
       isSettleStablecoin,
-      settleCoin,
+      depositCoin: depositCoinUpper,
+      settleCoin: settleCoinUpper,
     })
 
-    // User wants to pay `amount` in USD, we need depositAmount = amount / rate
+    // User wants to pay `amount` in USD
+    // We need to calculate how much deposit coin that requires
     let isWithinRange = true
     let estimatedDepositAmount = 0
 
-    if (rate > 0 && amount) {
-      estimatedDepositAmount = amount / rate
+    if (amount > 0) {
+      if (isDepositStablecoin) {
+        // Deposit is stablecoin, so amount USD = amount depositCoin
+        estimatedDepositAmount = amount
+      } else if (isSettleStablecoin && rate > 0) {
+        // amount USD = amount settleCoin, so depositAmount = amount / rate
+        estimatedDepositAmount = amount / rate
+      } else if (minUsd > 0 && maxUsd < 999999) {
+        // We have USD prices, calculate deposit amount
+        const depositUsdPrice = maxUsd / max // USD per deposit coin
+        estimatedDepositAmount = amount / depositUsdPrice
+      } else {
+        // Can't calculate, assume within range
+        estimatedDepositAmount = 0
+      }
 
-      // Check with 1% buffer for rate fluctuations
-      isWithinRange = estimatedDepositAmount >= min * 0.99 && estimatedDepositAmount <= max * 1.01
+      if (estimatedDepositAmount > 0) {
+        // Check with 1% buffer for rate fluctuations
+        isWithinRange = estimatedDepositAmount >= min * 0.99 && estimatedDepositAmount <= max * 1.01
+      }
 
       console.log("[v0] Amount validation:", {
         requestedAmountUsd: amount,
@@ -146,7 +208,7 @@ export async function POST(request: NextRequest) {
     }
 
     let reason: string | undefined = undefined
-    if (!isWithinRange && rate > 0) {
+    if (!isWithinRange && estimatedDepositAmount > 0) {
       if (estimatedDepositAmount < min) {
         reason = `Minimum: $${minUsd.toFixed(2)}`
       } else if (estimatedDepositAmount > max) {
@@ -177,4 +239,32 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     )
   }
+}
+
+function getCoingeckoId(symbol: string): string {
+  const mapping: Record<string, string> = {
+    BTC: "bitcoin",
+    ETH: "ethereum",
+    SOL: "solana",
+    MATIC: "matic-network",
+    POL: "matic-network",
+    AVAX: "avalanche-2",
+    BNB: "binancecoin",
+    XRP: "ripple",
+    ADA: "cardano",
+    DOGE: "dogecoin",
+    DOT: "polkadot",
+    LINK: "chainlink",
+    UNI: "uniswap",
+    ATOM: "cosmos",
+    LTC: "litecoin",
+    TRX: "tron",
+    XLM: "stellar",
+    ALGO: "algorand",
+    FTM: "fantom",
+    NEAR: "near",
+    ARB: "arbitrum",
+    OP: "optimism",
+  }
+  return mapping[symbol.toUpperCase()] || symbol.toLowerCase()
 }
