@@ -10,7 +10,6 @@ import { Label } from "@/components/ui/label"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { Coins } from "lucide-react"
 
 export default function SignUpPage() {
   const [email, setEmail] = useState("")
@@ -64,8 +63,8 @@ export default function SignUpPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 font-bold text-2xl mb-4">
-            <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center text-white">
-              <Coins className="h-5 w-5" />
+            <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground font-bold">
+              CP
             </div>
             <span>CloaxPay</span>
           </Link>

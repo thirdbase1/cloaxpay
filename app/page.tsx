@@ -359,7 +359,6 @@ window.location.href = widget_url;`}
                   SideShift.ai
                 </a>
               </p>
-              <p className="text-sm text-muted-foreground">Built with ❤️ for the crypto community</p>
               <p className="text-xs text-muted-foreground">
                 © {new Date().getFullYear()} CloaxPay. All rights reserved.
               </p>

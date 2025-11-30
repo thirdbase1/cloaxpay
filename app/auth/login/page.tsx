@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { Coins, Lock, Mail, Loader2 } from "lucide-react"
+import { Lock, Mail, Loader2 } from "lucide-react"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -47,8 +47,8 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8 space-y-4">
           <Link href="/" className="inline-flex items-center justify-center gap-3 group">
-            <div className="relative h-12 w-12 rounded-2xl bg-primary flex items-center justify-center text-primary-foreground transition-transform group-hover:scale-105">
-              <Coins className="h-6 w-6" />
+            <div className="relative h-12 w-12 rounded-2xl bg-primary flex items-center justify-center text-primary-foreground font-bold text-lg transition-transform group-hover:scale-105">
+              CP
               <div className="absolute inset-0 rounded-2xl bg-primary/20 blur-xl group-hover:blur-2xl transition-all" />
             </div>
             <span className="font-bold text-2xl">CloaxPay</span>
