@@ -30,17 +30,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const shiftId = session.metadata?.shift_id
+    const shiftId = session.sideshift_order_id || session.metadata?.shift_id
 
     if (shiftId) {
       try {
         const sideshift = createSideShiftClient()
+        // Note: SideShift only allows cancellation after 5 minutes
         await sideshift.cancelOrder(shiftId)
-
         console.log("[v0] Cancelled SideShift order:", shiftId)
-      } catch (error) {
-        console.error("[v0] Failed to cancel SideShift order:", error)
-        // Continue anyway to update our database
+      } catch (error: any) {
+        // Log but don't fail - SideShift may reject cancellation if too early or already processed
+        console.error("[v0] SideShift cancel error (may be expected):", error?.message || error)
+        // Continue to update our database regardless
       }
     }
 
@@ -55,6 +56,21 @@ export async function POST(request: NextRequest) {
 
     if (updateError) {
       throw updateError
+    }
+
+    let cancelUrl = ""
+    try {
+      const { data: merchant } = await supabase
+        .from("merchants")
+        .select("cancel_url")
+        .eq("id", session.merchant_id)
+        .single()
+
+      if (merchant?.cancel_url) {
+        cancelUrl = merchant.cancel_url
+      }
+    } catch (err) {
+      console.log("[v0] Could not fetch merchant cancel_url")
     }
 
     const { ipAddress, userAgent } = getRequestInfo(request)
@@ -97,6 +113,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: reason === "expired" ? "Payment session expired" : "Payment cancelled successfully",
+      cancelUrl, // Return the cancel URL for redirect
     })
   } catch (error) {
     console.error("[v0] Cancel payment error:", error)

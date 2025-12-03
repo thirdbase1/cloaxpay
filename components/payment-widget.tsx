@@ -6,19 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  Check,
-  Copy,
-  Loader2,
-  AlertCircle,
-  CheckCircle2,
-  X,
-  Clock,
-  Wallet,
-  Zap,
-  Shield,
-  ShieldAlert,
-} from "lucide-react"
+import { Check, Copy, Loader2, AlertCircle, CheckCircle2, X, Clock, Wallet, Zap, ShieldAlert } from "lucide-react"
 import { QRCodeSVG } from "qrcode.react"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -79,7 +67,8 @@ export function PaymentWidget({
   )
   const [chains, setChains] = useState<Chain[]>([])
   const [selectedChain, setSelectedChain] = useState<string>("")
-  const [depositAddress, setDepositAddress] = useState<string>("")
+  const [depositAddress, setDepositAddress] = useState("")
+  const [shiftId, setShiftId] = useState<string | null>(null) // Added state to store SideShift order ID
   const [isLoadingChains, setIsLoadingChains] = useState(true)
   const [isLoadingSession, setIsLoadingSession] = useState(!initialAmount) // Only load if no initial data
   const [isGeneratingAddress, setIsGeneratingAddress] = useState(false)
@@ -89,6 +78,9 @@ export function PaymentWidget({
   const [isChecking, setIsChecking] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
   const [timeLeft, setTimeLeft] = useState(600) // 10 minutes in seconds
+  const [shiftCreatedAt, setShiftCreatedAt] = useState<number | null>(null)
+  const [cancelAvailableIn, setCancelAvailableIn] = useState<number>(0)
+  // </CHANGE>
   const [sessionExpired, setSessionExpired] = useState(false)
   const [hasClickedPaid, setHasClickedPaid] = useState(false)
   const [cryptoAmount, setCryptoAmount] = useState<string>("")
@@ -155,6 +147,29 @@ export function PaymentWidget({
     }
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
   }
+
+  const formatCancelTimer = (seconds: number) => {
+    const m = Math.floor(seconds / 60)
+    const s = seconds % 60
+    return `${m}:${s.toString().padStart(2, "0")}`
+  }
+  // </CHANGE>
+  // </CHANGE> Start - Moved this useEffect to be after the formatters
+  useEffect(() => {
+    if (!shiftCreatedAt) return
+
+    const updateCancelTimer = () => {
+      const elapsed = Math.floor((Date.now() - shiftCreatedAt) / 1000)
+      const remaining = Math.max(0, 300 - elapsed) // 300 seconds = 5 minutes
+      setCancelAvailableIn(remaining)
+    }
+
+    updateCancelTimer()
+    const interval = setInterval(updateCancelTimer, 1000)
+
+    return () => clearInterval(interval)
+  }, [shiftCreatedAt])
+  // </CHANGE>
 
   const needsMemo = () => {
     if (!selectedChain) return false
@@ -401,6 +416,23 @@ export function PaymentWidget({
     return () => clearInterval(pollInterval)
   }, [sessionData, depositAddress, sessionId, status, merchantBranding.successUrl])
 
+  // Moved this useEffect to be after the formatters
+  // useEffect(() => {
+  //   if (!shiftCreatedAt) return
+
+  //   const updateCancelTimer = () => {
+  //     const elapsed = Math.floor((Date.now() - shiftCreatedAt) / 1000)
+  //     const remaining = Math.max(0, 300 - elapsed) // 300 seconds = 5 minutes
+  //     setCancelAvailableIn(remaining)
+  //   }
+
+  //   updateCancelTimer()
+  //   const interval = setInterval(updateCancelTimer, 1000)
+
+  //   return () => clearInterval(interval)
+  // }, [shiftCreatedAt])
+  // </CHANGE>
+
   useEffect(() => {
     const savedState = localStorage.getItem(`payment_${sessionId}`)
     if (savedState) {
@@ -413,6 +445,7 @@ export function PaymentWidget({
 
         setSelectedChain(parsed.selectedChain || "")
         setDepositAddress(parsed.depositAddress || "")
+        setShiftId(parsed.shiftId || null) // Restore shiftId
         setHasClickedPaid(parsed.hasClickedPaid || false) // Restore hasClickedPaid
         setRefundAddress(parsed.refundAddress || "")
         setRefundMemo(parsed.refundMemo || "") // Restore refundMemo
@@ -428,12 +461,13 @@ export function PaymentWidget({
 
   useEffect(() => {
     if (selectedChain || depositAddress || refundAddress || refundMemo) {
-      // Include refundMemo and hasClickedPaid
+      // Include shiftId, refundMemo and hasClickedPaid
       localStorage.setItem(
         `payment_${sessionId}`,
         JSON.stringify({
           selectedChain,
           depositAddress,
+          shiftId, // Save shiftId
           hasClickedPaid, // Save hasClickedPaid state
           refundAddress,
           refundMemo, // Save refundMemo
@@ -441,7 +475,7 @@ export function PaymentWidget({
         }),
       )
     }
-  }, [sessionId, selectedChain, depositAddress, hasClickedPaid, refundAddress, refundMemo]) // Add refundMemo and hasClickedPaid dependency
+  }, [sessionId, selectedChain, depositAddress, shiftId, hasClickedPaid, refundAddress, refundMemo]) // Add shiftId, refundMemo and hasClickedPaid dependency
 
   useEffect(() => {
     if (!selectedChain || !sessionData?.amount) return
@@ -690,6 +724,7 @@ export function PaymentWidget({
       }
 
       setDepositAddress(data.depositAddress)
+      setShiftId(data.shiftId) // Store the SideShift order ID
       if (data.depositAmount) setCryptoAmount(data.depositAmount)
 
       toast({
@@ -807,6 +842,7 @@ export function PaymentWidget({
       JSON.stringify({
         selectedChain,
         depositAddress,
+        shiftId, // Include shiftId in saved state
         hasClickedPaid: true,
         refundAddress,
         refundMemo,
@@ -863,39 +899,10 @@ export function PaymentWidget({
       setIsChecking(false)
     }
   }
-  // </CHANGE> End
+  // </CHANGE>
 
   async function handleCancel() {
-    if (hasClickedPaid) {
-      toast({
-        title: "Cannot Cancel",
-        description:
-          "You've indicated payment was sent. Cancelling now could result in loss of funds. Please wait for blockchain confirmation or contact support.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    if (
-      status === "detected" ||
-      status === "confirming" ||
-      status === "processing" ||
-      status === "swapping" ||
-      status === "settling"
-    ) {
-      // Added more status checks
-      toast({
-        title: "Cannot Cancel",
-        description:
-          "Payment has been detected on the blockchain. Cancellation is no longer possible to prevent loss of funds.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    if (!confirm("Are you sure you want to cancel this payment?")) {
-      return
-    }
+    if (!confirm("Are you sure you want to cancel this payment?")) return
 
     setIsCancelling(true)
     try {
@@ -905,6 +912,8 @@ export function PaymentWidget({
         body: JSON.stringify({ sessionId }),
       })
 
+      const data = await response.json()
+
       if (response.ok) {
         localStorage.removeItem(`payment_${sessionId}`)
         toast({
@@ -913,251 +922,39 @@ export function PaymentWidget({
         })
         setStatus("cancelled")
 
-        if (merchantBranding.cancelUrl) {
+        const redirectUrl = data.cancelUrl || merchantBranding.cancelUrl
+        if (redirectUrl) {
+          console.log("[v0] Redirecting to cancel URL:", redirectUrl)
           setTimeout(() => {
-            window.location.href = merchantBranding.cancelUrl!
+            try {
+              const url = new URL(redirectUrl)
+              url.searchParams.set("session_id", sessionId)
+              url.searchParams.set("status", "cancelled")
+              window.location.href = url.toString()
+            } catch (e) {
+              // If URL is invalid, try direct redirect
+              window.location.href = redirectUrl
+            }
           }, 1500)
         }
       } else {
-        throw new Error("Failed to cancel payment")
+        throw new Error(data.error || "Failed to cancel payment")
       }
     } catch (error) {
       console.error("[v0] Failed to cancel payment:", error)
       toast({
         title: "Error",
-        description: "Failed to cancel payment. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to cancel payment. Please try again.",
         variant: "destructive",
       })
     } finally {
       setIsCancelling(false)
     }
   }
-
-  // REMOVED REDUNDANT formatTime function
-  const isFinalStatus = ["completed", "cancelled", "expired", "failed", "refunded"].includes(status)
-
-  if (!isMounted) {
-    return (
-      <div className="w-full max-w-md mx-auto p-4">
-        <Card className="h-[400px] flex items-center justify-center bg-card">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </Card>
-      </div>
-    )
-  }
-
-  if (isLoadingSession) {
-    return (
-      <div className="w-full max-w-md mx-auto">
-        <Card className="overflow-hidden border-0 shadow-2xl bg-black/90 backdrop-blur-xl ring-1 ring-white/10">
-          <div className="p-6 flex items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
-            <span className="ml-3 text-white">Loading payment session...</span>
-          </div>
-        </Card>
-      </div>
-    )
-  }
-
-  if (!sessionData) {
-    return (
-      <div className="w-full max-w-md mx-auto">
-        <Card className="overflow-hidden border-0 shadow-2xl bg-black/90 backdrop-blur-xl ring-1 ring-white/10">
-          <div className="p-6 text-center">
-            <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-white mb-2">Session Not Found</h3>
-            <p className="text-sm text-white/60">This payment session could not be loaded.</p>
-          </div>
-        </Card>
-      </div>
-    )
-  }
-
-  if (merchantError) {
-    return (
-      <div className="w-full max-w-md mx-auto">
-        <Card className="overflow-hidden border-0 shadow-2xl bg-black/90 backdrop-blur-xl ring-1 ring-white/10">
-          <div className="p-6 flex flex-col items-center justify-center gap-6 text-center">
-            <div className="h-20 w-20 rounded-full bg-amber-500/20 flex items-center justify-center ring-8 ring-amber-500/10">
-              <Wallet className="h-10 w-10 text-amber-400" />
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-2xl font-bold text-white">Setup Required</h3>
-              <p className="text-white/60 max-w-[280px] mx-auto leading-relaxed">
-                The merchant hasn't configured their wallet for this network yet.
-              </p>
-            </div>
-
-            <div className="w-full bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex gap-3">
-              <ShieldAlert className="h-5 w-5 shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-amber-200">What should I do?</p>
-                <p className="text-xs text-amber-400/80 leading-relaxed">
-                  Please contact the site owner and let them know they need to add a wallet for{" "}
-                  <strong>{selectedChain.split("/")[0].toUpperCase()}</strong> in their dashboard settings.
-                </p>
-              </div>
-            </div>
-
-            <Button
-              onClick={() => {
-                setMerchantError(false)
-                setSelectedChain("")
-              }}
-              variant="outline"
-              className="w-full border-2 border-white/10 bg-white/10 text-white hover:bg-white/20"
-            >
-              Try Different Payment Method
-            </Button>
-          </div>
-        </Card>
-      </div>
-    )
-  }
-
-  const { amount, currency, merchant } = sessionData
-
-  if (status === "completed") {
-    return (
-      <div className="w-full max-w-md mx-auto">
-        <Card className="overflow-hidden border-0 shadow-2xl bg-black/90 backdrop-blur-xl ring-1 ring-white/10">
-          <div className="p-6 flex flex-col items-center justify-center gap-4 text-center">
-            <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center">
-              <CheckCircle2 className="h-10 w-10 text-green-600" />
-            </div>
-            <div>
-              <h3 className="text-2xl font-bold text-white mb-1">Payment Confirmed!</h3>
-              <p className="text-white/60">
-                Your payment of ${amount?.toLocaleString()} {currency} has been processed successfully.
-              </p>
-            </div>
-            <p className="text-sm text-white/40 mt-2">You can close this window now.</p>
-          </div>
-        </Card>
-      </div>
-    )
-  }
-
-  if (status === "cancelled") {
-    return (
-      <div className="w-full max-w-md mx-auto">
-        <Card className="overflow-hidden border-0 shadow-2xl bg-black/90 backdrop-blur-xl ring-1 ring-white/10">
-          <div className="p-6 flex flex-col items-center justify-center gap-4 text-center">
-            <div className="h-16 w-16 rounded-full bg-gray-100 flex items-center justify-center">
-              <X className="h-10 w-10 text-gray-600" />
-            </div>
-            <div>
-              <h3 className="text-2xl font-bold text-white mb-1">Payment Cancelled</h3>
-              <p className="text-white/60">This payment session has been cancelled.</p>
-            </div>
-            <p className="text-sm text-white/40 mt-2">You can close this window now.</p>
-          </div>
-        </Card>
-      </div>
-    )
-  }
-
-  if (status === "expired" || sessionExpired) {
-    return (
-      <div className="w-full max-w-md mx-auto">
-        <Card className="overflow-hidden border-0 shadow-2xl bg-black/90 backdrop-blur-xl ring-1 ring-white/10">
-          <div className="p-6 flex flex-col items-center justify-center gap-4 text-center">
-            <div className="h-16 w-16 rounded-full bg-amber-100 flex items-center justify-center">
-              <Clock className="h-10 w-10 text-amber-600" />
-            </div>
-            <div>
-              <h3 className="text-2xl font-bold text-white mb-1">Session Expired</h3>
-              <p className="text-white/60">This payment session expired after 10 minutes of inactivity.</p>
-            </div>
-            <p className="text-sm text-white/40 mt-2">Please request a new payment link from the merchant.</p>
-          </div>
-        </Card>
-      </div>
-    )
-  }
-
-  if (status === "failed") {
-    return (
-      <div className="w-full max-w-md mx-auto">
-        <Card className="overflow-hidden border-0 shadow-2xl bg-black/90 backdrop-blur-xl ring-1 ring-white/10">
-          <div className="p-6 flex flex-col items-center justify-center gap-4 text-center">
-            <div className="h-16 w-16 rounded-full bg-amber-100 flex items-center justify-center">
-              <Clock className="h-10 w-10 text-amber-600" />
-            </div>
-            <div>
-              <h3 className="text-2xl font-bold text-white mb-1">Session Expired</h3>
-              <p className="text-white/60">This payment session expired after 10 minutes of inactivity.</p>
-            </div>
-            <p className="text-sm text-white/40 mt-2">Please request a new payment link from the merchant.</p>
-          </div>
-        </Card>
-      </div>
-    )
-  }
-
-  const renderPaymentStatus = () => {
-    if (hasClickedPaid && ["pending", "waiting", "awaiting_payment"].includes(status)) {
-      return (
-        <div className="w-full p-4 rounded-xl bg-primary/5 border-2 border-primary/10 animate-pulse flex flex-col items-center gap-3">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping" />
-              <div className="relative bg-primary/10 p-2 rounded-full">
-                <Loader2 className="h-6 w-6 text-primary animate-spin" />
-              </div>
-            </div>
-            <div className="flex flex-col">
-              <span className="font-bold text-primary">Confirming your deposit, be patient...</span>
-              <span className="text-xs text-muted-foreground">Looking for your transaction</span>
-            </div>
-          </div>
-          <div className="w-full bg-primary/10 h-1.5 rounded-full overflow-hidden">
-            <div className="h-full bg-primary/50 w-1/3 animate-[shimmer_2s_infinite]" />
-          </div>
-        </div>
-      )
-    }
-
-    // Only show button if we haven't clicked paid OR if we have but status changed (handled above)
-    // Actually, if status is confirming/etc, the main loop handles it.
-    // This button is specifically for the manual "I sent it" action.
-
-    return (
-      <Button
-        onClick={() => setShowPaidConfirmation(true)}
-        disabled={hasClickedPaid || isChecking || !["pending", "waiting", "awaiting_payment"].includes(status)}
-        className={`w-full h-14 text-base font-bold rounded-lg transition-all ${
-          hasClickedPaid || !["pending", "waiting", "awaiting_payment"].includes(status)
-            ? "bg-muted text-muted-foreground cursor-not-allowed hidden" // Hide if clicked to show the feedback UI above instead
-            : "bg-success hover:bg-success/90 text-success-foreground shadow-lg shadow-success/20"
-        }`}
-      >
-        {isChecking ? (
-          <div className="flex items-center gap-2">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            Checking Status...
-          </div>
-        ) : (
-          <>
-            <CheckCircle2 className="h-5 w-5 mr-2" />I Have Sent Payment
-          </>
-        )}
-      </Button>
-    )
-  }
   // </CHANGE>
 
-  const filteredChains = chains.filter((chain) => {
-    if (!chainSearch) return true
-    const searchLower = chainSearch.toLowerCase()
-    return (
-      chain.coin.toLowerCase().includes(searchLower) ||
-      chain.network.toLowerCase().includes(searchLower) ||
-      chain.name.toLowerCase().includes(searchLower)
-    )
-  })
+  const isFinalStatus = ["completed", "cancelled", "expired", "failed", "refunded"].includes(status)
 
-  // Restored original centered design with shield icon
   if (!isMounted) {
     return (
       <div className="w-full max-w-md mx-auto p-4">
@@ -1271,390 +1068,355 @@ export function PaymentWidget({
     )
   }
 
-  return (
-    <Card className="w-full max-w-md mx-auto shadow-2xl border-0 bg-gradient-to-b from-card to-card/95 overflow-hidden">
-      {/* Progress bar at top */}
-      <div className="h-2 bg-gradient-to-r from-primary to-primary/80" />
-
-      {/* Header - Restored original centered design with shield icon */}
-      <div className="relative bg-gradient-to-br from-primary/5 via-primary/3 to-transparent p-6 border-b">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-            <Shield className="h-6 w-6 text-primary" />
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">Secure Payment</p>
-            <p className="text-sm font-medium text-foreground">End-to-End Encrypted</p>
-          </div>
-        </div>
-
-        <div className="text-center space-y-1">
-          <p className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">Total Amount</p>
-          <div className="flex items-baseline justify-center gap-2">
-            <span className="text-5xl font-bold tracking-tight">{sessionData.amount}</span>
-            <span className="text-xl font-semibold text-muted-foreground">{sessionData.currency}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="p-6 space-y-6">
-        {/* Payment method selection or deposit address */}
-        {depositAddress ? (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
-            {/* Status indicator */}
-            {(status === "confirming" || status === "swapping") && (
-              <div className="flex items-center gap-3 p-4 rounded-xl bg-primary/10 border border-primary/20">
-                <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    {status === "confirming" ? "Payment Detected!" : "Converting Payment..."}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {status === "confirming"
-                      ? "Waiting for blockchain confirmations..."
-                      : "Your payment is being converted..."}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* QR Code and Address */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm font-semibold">Send exactly:</Label>
-                <Button variant="ghost" size="sm" className="h-8 text-xs gap-1.5" onClick={handleCopyAmount}>
-                  <Copy className="h-3.5 w-3.5" />
-                  Copy Amount
-                </Button>
-              </div>
-
-              <div className="p-4 rounded-xl bg-muted/50 border-2 border-dashed border-primary/30">
-                <div className="flex items-center justify-between">
-                  <span className="text-2xl font-bold font-mono">{cryptoAmount}</span>
-                  <span className="text-lg font-semibold text-primary">
-                    {selectedChain.split("/")[0].toUpperCase()}
-                  </span>
-                </div>
-              </div>
-
-              {showQR && (
-                <div className="flex justify-center p-4 bg-white rounded-xl">
-                  <QRCodeSVG value={depositAddress} size={180} level="H" includeMargin />
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">To this address:</Label>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 p-3 rounded-lg bg-muted/50 border font-mono text-xs break-all">
-                    {depositAddress}
-                  </div>
-                  <Button variant="outline" size="icon" className="shrink-0 bg-transparent" onClick={handleCopy}>
-                    {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-amber-500" />
-                  <span className="text-sm font-medium">Time remaining:</span>
-                </div>
-                <span className="font-mono font-bold text-amber-600">{formatTime(timeLeft)}</span>
+  const renderPaymentStatus = () => {
+    if (hasClickedPaid && ["pending", "waiting", "awaiting_payment"].includes(status)) {
+      return (
+        <div className="w-full p-4 rounded-xl bg-primary/5 border-2 border-primary/10 animate-pulse flex flex-col items-center gap-3">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping" />
+              <div className="relative bg-primary/10 p-2 rounded-full">
+                <Loader2 className="h-6 w-6 text-primary animate-spin" />
               </div>
             </div>
+            <div className="flex flex-col">
+              <span className="font-bold text-primary">Confirming your deposit, be patient...</span>
+              <span className="text-xs text-muted-foreground">Looking for your transaction</span>
+            </div>
+          </div>
+          <div className="w-full bg-primary/10 h-1.5 rounded-full overflow-hidden">
+            <div className="h-full bg-primary/50 w-1/3 animate-[shimmer_2s_infinite]" />
+          </div>
+        </div>
+      )
+    }
 
-            {/* I Have Paid Button - Show only when deposit address is displayed and payment not yet confirmed */}
-            <div className="space-y-3 pt-2">{renderPaymentStatus()}</div>
-            {/* </CHANGE> */}
+    // Only show button if we haven't clicked paid OR if we have but status changed (handled above)
+    // Actually, if status is confirming/etc, the main loop handles it.
+    // This button is specifically for the manual "I sent it" action.
+
+    return (
+      <Button
+        onClick={() => setShowPaidConfirmation(true)}
+        disabled={hasClickedPaid || isChecking || !["pending", "waiting", "awaiting_payment"].includes(status)}
+        className={`w-full h-14 text-base font-bold rounded-lg transition-all ${
+          hasClickedPaid || !["pending", "waiting", "awaiting_payment"].includes(status)
+            ? "bg-muted text-muted-foreground cursor-not-allowed hidden" // Hide if clicked to show the feedback UI above instead
+            : "bg-success hover:bg-success/90 text-success-foreground shadow-lg shadow-success/20"
+        }`}
+      >
+        {isChecking ? (
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Checking Status...
           </div>
         ) : (
-          <div className="space-y-6">
-            {/* Chain Selection - Restored original dropdown design with coin icons */}
-            <div className="space-y-3">
-              <Label className="text-sm font-semibold text-foreground">Select Payment Method</Label>
-              <div className="relative">
-                <Input
-                  placeholder="Search coin or chain..."
-                  value={chainSearch}
-                  onChange={(e) => setChainSearch(e.target.value)}
-                  className="h-12 rounded-lg bg-muted/50 border-2 border-transparent hover:border-primary/30 focus:border-primary/50"
-                />
-              </div>
-              <Select value={selectedChain} onValueChange={setSelectedChain} disabled={isLoadingChains}>
-                <SelectTrigger className="h-14 rounded-lg bg-muted/50 border-2 border-primary/30 focus:border-primary/50">
-                  <SelectValue placeholder={isLoadingChains ? "Loading chains..." : "Choose cryptocurrency..."} />
+          <>
+            <CheckCircle2 className="h-5 w-5 mr-2" />I Have Sent Payment
+          </>
+        )}
+      </Button>
+    )
+  }
+  // </CHANGE>
+
+  const filteredChains = chains.filter((chain) => {
+    if (!chainSearch) return true
+    const searchLower = chainSearch.toLowerCase()
+    return (
+      chain.coin.toLowerCase().includes(searchLower) ||
+      chain.network.toLowerCase().includes(searchLower) ||
+      chain.name.toLowerCase().includes(searchLower)
+    )
+  })
+
+  return (
+    <Card className="w-full max-w-md mx-auto shadow-2xl border-0">
+      <div className="flex flex-col gap-6 p-8">
+        {/* Merchant Info */}
+        {(merchantBranding.logo || merchantBranding.companyUrl || merchantName) && (
+          <div className="flex items-center gap-4">
+            {merchantBranding.logo && (
+              <img src={merchantBranding.logo || "/placeholder.svg"} alt="Merchant Logo" className="h-10 w-auto" />
+            )}
+            <div className="flex flex-col">
+              {merchantName && <h3 className="text-lg font-semibold text-foreground">{merchantName}</h3>}
+              {merchantBranding.companyUrl && (
+                <a
+                  href={merchantBranding.companyUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-muted-foreground hover:underline"
+                >
+                  {merchantBranding.companyUrl.replace(/^https?:\/\//, "")}
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Amount and Status */}
+        <div className="flex flex-col gap-2">
+          <div className="flex justify-between items-center">
+            <p className="text-lg text-muted-foreground">Amount:</p>
+            <p className="text-lg font-bold text-foreground">
+              ${sessionData.amount} {sessionData.currency}
+            </p>
+          </div>
+          <div className="flex justify-between items-center">
+            <p className="text-lg text-muted-foreground">Status:</p>
+            <div className="flex items-center gap-2 capitalize">
+              {status === "pending" && <Clock className="h-5 w-5 text-amber-500" />}
+              {status === "confirming" && <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />}
+              {status === "swapping" && <Zap className="h-5 w-5 text-violet-500" />}
+              {status === "awaiting_payment" && <Wallet className="h-5 w-5 text-gray-500" />}
+              <span
+                className={`font-semibold ${status === "pending" || status === "awaiting_payment" ? "text-amber-500" : status === "confirming" ? "text-blue-500" : status === "swapping" ? "text-violet-500" : "text-green-500"}`}
+              >
+                {status}
+              </span>
+              {(status === "pending" || status === "awaiting_payment") && (
+                <p className="text-sm text-muted-foreground">({formatTime(timeLeft)})</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Deposit Information */}
+        {!depositAddress && !isGeneratingAddress && !merchantError && !amountError && !samePairError && !geoBlocked && (
+          <>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="deposit-currency" className="text-muted-foreground">
+                Select Deposit Currency
+              </Label>
+              <Select onValueChange={handleChainSelect} defaultValue={selectedChain}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Choose a cryptocurrency..." />
                 </SelectTrigger>
-                <SelectContent className="max-h-80 overflow-y-auto">
-                  {filteredChains.map((chain) => (
-                    <SelectItem
-                      key={`${chain.coin}/${chain.network}`}
-                      value={`${chain.coin}/${chain.network}`}
-                      className="py-3 cursor-pointer"
-                    >
-                      <div className="flex items-center gap-3">
-                        {/* Circular placeholder icon */}
-                        <div className="h-10 w-10 rounded-full bg-muted border-2 border-muted-foreground/20 flex items-center justify-center shrink-0">
-                          <span className="text-xs font-bold text-muted-foreground">
-                            {chain.coin.substring(0, 2).toUpperCase()}
-                          </span>
-                        </div>
-                        {/* Coin name and network */}
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-foreground">{chain.name || chain.coin}</span>
-                          <span className="text-xs text-muted-foreground uppercase">{chain.network}</span>
-                        </div>
-                      </div>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
+                  <div className="sticky top-0 z-10 bg-background p-2">
+                    <Input
+                      placeholder="Search for a currency..."
+                      value={chainSearch}
+                      onChange={(e) => setChainSearch(e.target.value)}
+                      className="h-8"
+                    />
+                  </div>
+                  {isLoadingChains ? (
+                    <SelectItem value="" disabled className="flex justify-center items-center">
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
                     </SelectItem>
-                  ))}
+                  ) : filteredChains.length === 0 ? (
+                    <SelectItem value="" disabled className="text-center text-muted-foreground">
+                      No matching currencies found.
+                    </SelectItem>
+                  ) : (
+                    filteredChains.map((chain) => (
+                      <SelectItem key={`${chain.coin}/${chain.network}`} value={`${chain.coin}/${chain.network}`}>
+                        {chain.coin.toUpperCase()} ({chain.network})
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Quote Details */}
-            {selectedChain && (
-              <div className="space-y-3 p-4 rounded-xl bg-muted/30 border animate-in fade-in slide-in-from-top-2">
-                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <Zap className="h-4 w-4 text-primary" />
-                  Transaction Preview
-                </div>
-
-                {isLoadingQuote ? (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                  </div>
-                ) : isValidatingCoin ? (
-                  <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {validatingMessage || "Validating..."}
-                  </div>
-                ) : amountError ? (
-                  <div className="space-y-1">
-                    <div className="flex items-start gap-2 text-destructive">
-                      <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                      <span className="text-sm font-medium">{amountError.message}</span>
-                    </div>
-                    {amountError.min && (
-                      <p className="text-sm text-destructive pl-6">
-                        Min: {amountError.min} {selectedChain?.split("/")[0].toUpperCase()}
-                      </p>
-                    )}
-                    {amountError.max && (
-                      <p className="text-sm text-destructive pl-6">
-                        Max: {amountError.max} {selectedChain?.split("/")[0].toUpperCase()}
-                      </p>
-                    )}
-                  </div>
-                ) : samePairError ? (
-                  <div className="space-y-1">
-                    <div className="flex items-start gap-2 text-destructive">
-                      <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                      <span className="text-sm font-medium">{samePairError.message}</span>
-                    </div>
-                    <p className="text-sm text-destructive pl-6">
-                      {samePairError.depositCoin} cannot be exchanged for {samePairError.settleCoin}.
-                    </p>
-                  </div>
-                ) : (
-                  quoteDetails && (
-                    <>
-                      <div className="flex justify-between items-baseline">
-                        <span className="text-sm text-muted-foreground">You Send</span>
-                        <div className="text-right">
-                          <span className="text-lg font-bold text-foreground">
-                            {Number.parseFloat(quoteDetails.depositAmount).toFixed(6)}{" "}
-                            <span className="text-sm font-semibold text-primary">{quoteDetails.depositCoin}</span>
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="h-px bg-border" />
-
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Merchant Receives</span>
-                        <div className="text-right">
-                          <span className="font-mono text-sm font-semibold text-foreground">
-                            $
-                            {quoteDetails.settleAmountUSD ||
-                              Number.parseFloat(quoteDetails.settleAmount || "0").toFixed(2)}
-                          </span>
-                          <span className="text-xs text-muted-foreground ml-2">
-                            ({Number.parseFloat(quoteDetails.settleAmount || "0").toFixed(6)} {quoteDetails.settleCoin})
-                          </span>
-                        </div>
-                      </div>
-
-                      {quoteDetails.samePair ? (
-                        <div className="flex gap-2 items-start p-3 rounded-lg bg-card/50 border border-primary/10">
-                          <Zap className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                          <p className="text-xs text-muted-foreground leading-relaxed">{quoteDetails.message}</p>
-                        </div>
-                      ) : (
-                        <div className="flex gap-2 items-start p-3 rounded-lg bg-card/50 border border-primary/10">
-                          <Zap className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                          <p className="text-xs text-muted-foreground leading-relaxed">
-                            Rate updates every 30 seconds. Final amount may vary slightly.
-                          </p>
-                        </div>
-                      )}
-                    </>
-                  )
+            {/* Refund Address and Memo */}
+            {(selectedChain || refundAddress) && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="refund-address" className="text-muted-foreground">
+                  Refund Address ({selectedChain.split("/")[0].toUpperCase()})
+                </Label>
+                <Input
+                  id="refund-address"
+                  value={refundAddress}
+                  onChange={(e) => {
+                    setRefundAddress(e.target.value)
+                    setIsRefundAddressValid(null) // Reset validation on input change
+                  }}
+                  placeholder={`Enter your ${selectedChain.split("/")[0].toUpperCase()} address for refunds`}
+                  className={isRefundAddressValid === false ? "border-destructive" : ""}
+                />
+                {isRefundAddressValid === false && (
+                  <p className="text-xs text-destructive mt-1">Invalid refund address format.</p>
                 )}
+                {needsMemo() && (
+                  <>
+                    <Label htmlFor="refund-memo" className="text-muted-foreground">
+                      Refund Memo
+                    </Label>
+                    <Input
+                      id="refund-memo"
+                      value={refundMemo}
+                      onChange={(e) => setRefundMemo(e.target.value)}
+                      placeholder="Enter memo/tag for refund"
+                      className={!refundMemo && selectedChain ? "border-destructive" : ""}
+                    />
+                  </>
+                )}
+              </div>
+            )}
+
+            {amountError && (
+              <div className="p-3 rounded-md bg-destructive/10 border border-destructive flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-destructive" />
+                <p className="text-sm text-destructive">
+                  {amountError.message}
+                  {amountError.min && ` Minimum: ${amountError.min}`}
+                  {amountError.max && ` Maximum: ${amountError.max}`}
+                </p>
+              </div>
+            )}
+
+            {samePairError && (
+              <div className="p-3 rounded-md bg-destructive/10 border border-destructive flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-destructive" />
+                <p className="text-sm text-destructive">{samePairError.message}</p>
               </div>
             )}
 
             {geoBlocked && (
-              <div className="p-4 rounded-xl bg-destructive/10 border-2 border-destructive/30 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-                <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-destructive">Service Unavailable</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    SideShift.ai is not available in your region due to geo-restrictions. Please try a VPN or contact
-                    the merchant for alternative payment methods.
-                  </p>
-                </div>
+              <div className="p-3 rounded-md bg-destructive/10 border border-destructive flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-destructive" />
+                <p className="text-sm text-destructive">Service is unavailable in your region.</p>
               </div>
             )}
+          </>
+        )}
 
-            {/* Refund Address Input */}
-            {selectedChain && !depositAddress && !isGeneratingAddress && (
-              <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
-                <Label className="text-sm font-semibold text-foreground">
-                  Your {selectedChain.split("/")[0].toUpperCase()} address
-                </Label>
-                <div className="relative">
-                  <Input
-                    value={refundAddress}
-                    onChange={(e) => {
-                      setRefundAddress(e.target.value)
-                      setIsRefundAddressValid(null)
-                    }}
-                    placeholder={`Your ${selectedChain.split("/")[0].toUpperCase()} address`}
-                    className={`h-12 rounded-lg border-2 pr-10 ${
-                      isRefundAddressValid === true
-                        ? "border-green-500/50 focus:border-green-500"
-                        : isRefundAddressValid === false
-                          ? "border-destructive/50 focus:border-destructive"
-                          : "bg-muted/50 border-transparent hover:border-primary/30 focus:border-primary/50"
-                    }`}
-                  />
-                  {isRefundAddressValid === true && (
-                    <Check className="absolute right-3 top-3.5 h-5 w-5 text-green-500 animate-in fade-in zoom-in" />
-                  )}
+        {/* Deposit Address & Amount */}
+        {depositAddress && (
+          <div className="flex flex-col gap-4 p-4 border border-primary/20 rounded-lg bg-primary/5">
+            {quoteDetails && (
+              <div className="flex flex-col gap-2">
+                <div className="flex justify-between items-center">
+                  <p className="text-muted-foreground">Deposit Amount:</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-foreground">{cryptoAmount}</p>
+                    <Button variant="ghost" size="icon" onClick={handleCopyAmount}>
+                      <Copy className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                  </div>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  We'll send your crypto back here if the transaction fails or is overpaid.
-                </p>
-                {needsMemo() && (
-                  <div className="space-y-2 pt-1">
-                    <Label className="text-sm font-semibold text-foreground flex items-center gap-2">
-                      Refund Memo / Destination Tag
-                      <span className="text-xs font-normal text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">
-                        Required for Exchanges
-                      </span>
-                    </Label>
-                    <Input
-                      value={refundMemo}
-                      onChange={(e) => setRefundMemo(e.target.value)}
-                      placeholder="123456789"
-                      className="h-12 rounded-lg bg-muted/50 border-2 border-transparent hover:border-primary/30 focus:border-primary/50"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      If you are using an exchange wallet (Coinbase, Binance, etc.), you MUST include this.
+                {quoteDetails.networkFee && quoteDetails.networkFeeUsd && (
+                  <div className="flex justify-between items-center">
+                    <p className="text-muted-foreground">Network Fee:</p>
+                    <p className="text-foreground text-sm">
+                      {quoteDetails.networkFee} {quoteDetails.depositCoin.toUpperCase()}
+                      {quoteDetails.networkFeeUsd && ` (~$${quoteDetails.networkFeeUsd})`}
                     </p>
                   </div>
                 )}
+                <div className="flex justify-between items-center">
+                  <p className="text-muted-foreground">Exchange Rate:</p>
+                  <p className="text-foreground text-sm">{quoteDetails.rate}</p>
+                </div>
+                <div className="flex justify-between items-center">
+                  <p className="text-muted-foreground">You'll Receive:</p>
+                  <p className="font-bold text-foreground">
+                    {quoteDetails.settleAmount} {quoteDetails.settleCoin.toUpperCase()}
+                    {quoteDetails.settleAmountUSD && ` (~$${quoteDetails.settleAmountUSD})`}
+                  </p>
+                </div>
+                {quoteDetails.message && <p className="text-xs text-yellow-500">{quoteDetails.message}</p>}
               </div>
             )}
 
-            {/* Action Button */}
-            {!depositAddress && (
-              <div className="space-y-3 pt-2">
-                <Button
-                  className="w-full h-14 text-base font-semibold bg-primary hover:bg-primary/90 rounded-lg shadow-lg shadow-primary/20 transition-all"
-                  onClick={() => handleChainSelect(selectedChain)}
-                  disabled={
-                    isLoadingChains ||
-                    !selectedChain ||
-                    !refundAddress ||
-                    isGeneratingAddress ||
-                    isValidatingCoin || // Disabled during validation
-                    !!amountError || // Disabled if there's an amount error
-                    !!samePairError || // Disabled if there's a same-pair error
-                    geoBlocked || // Disabled if geo-blocked
-                    (needsMemo() && !refundMemo) || // Disable button if memo is required but not provided
-                    isRefundAddressValid === false // Disable button if refund address is invalid
-                  }
-                >
-                  {isValidatingCoin ? ( // Show validation state
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      <span>Validating...</span>
-                    </div>
-                  ) : isGeneratingAddress ? (
-                    <div className="flex items-center gap-2">
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      <span>Generating Address...</span>
-                    </div>
-                  ) : (
-                    <>
-                      <Wallet className="w-5 h-5 mr-2" />
-                      Continue to Payment
-                    </>
-                  )}
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full h-12 text-muted-foreground hover:text-foreground"
-                  onClick={handleCancel}
-                  disabled={isCancelling}
-                >
-                  {isCancelling ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Cancelling...
-                    </>
-                  ) : (
-                    "Cancel Payment"
-                  )}
+            <div className="flex flex-col items-center gap-3">
+              {showQR ? (
+                <QRCodeSVG
+                  value={`${depositAddress}?amount=${cryptoAmount}&asset=${selectedChain.split("/")[0].toUpperCase()}`}
+                  size={150}
+                  bgColor={"#ffffff"}
+                  fgColor={"#000000"}
+                  level={"H"}
+                  includeMargin={true}
+                />
+              ) : (
+                <div className="w-full p-3 border rounded-md text-center break-all border-primary/20 bg-primary/5">
+                  {depositAddress}
+                </div>
+              )}
+              <Button variant="outline" size="sm" onClick={() => setShowQR(!showQR)} className="text-muted-foreground">
+                {showQR ? "Show Address" : "Show QR Code"}
+              </Button>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-center gap-2">
+                <Input
+                  type="text"
+                  value={depositAddress}
+                  readOnly
+                  className="text-center focus-visible:ring-0 focus-visible:ring-offset-0 h-10"
+                />
+                <Button size="icon" onClick={handleCopy} disabled={copied}>
+                  {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
                 </Button>
               </div>
-            )}
+            </div>
+
+            {/* Instruction */}
+            <div className="text-center text-muted-foreground text-sm">
+              Send exactly {cryptoAmount} {selectedChain.split("/")[0].toUpperCase()} to the address above.
+              <br />
+              Your payment will be confirmed shortly.
+            </div>
+
+            {renderPaymentStatus()}
           </div>
+        )}
+
+        {isGeneratingAddress && (
+          <div className="flex flex-col items-center justify-center gap-4 p-4 border border-primary/20 rounded-lg bg-primary/5 min-h-[200px]">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-primary">Generating deposit address...</p>
+          </div>
+        )}
+
+        {merchantError && (
+          <div className="p-4 rounded-md bg-destructive/10 border border-destructive flex items-center gap-2">
+            <ShieldAlert className="h-6 w-6 text-destructive" />
+            <p className="text-sm text-destructive">
+              Merchant wallet configuration is missing. Please contact the merchant or support.
+            </p>
+          </div>
+        )}
+
+        {/* Cancel Button */}
+        {status !== "completed" && status !== "cancelled" && status !== "expired" && status !== "failed" && (
+          <Button
+            variant="outline"
+            onClick={handleCancel}
+            disabled={isCancelling}
+            className="mt-4 text-destructive hover:text-destructive hover:border-destructive bg-transparent"
+          >
+            {isCancelling ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <X className="h-4 w-4 mr-2" />}
+            Cancel Payment
+          </Button>
         )}
       </div>
 
-      {/* Footer */}
-      <div className="px-6 py-4 border-t bg-muted/20">
-        <p className="text-xs text-center text-muted-foreground">
-          Secured by CloaxPay • Non-Custodial • End-to-End Encrypted
-        </p>
-      </div>
-
+      {/* Confirmation Modal for "I have paid" */}
       <AlertDialog open={showPaidConfirmation} onOpenChange={setShowPaidConfirmation}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Payment Sent</AlertDialogTitle>
             <AlertDialogDescription>
-              Have you sent exactly{" "}
-              <strong>
-                {cryptoAmount} {selectedChain?.split("/")[0].toUpperCase()}
-              </strong>{" "}
-              to the deposit address?
-              <br />
-              <br />
-              Once you confirm, we will start monitoring the blockchain for your transaction.
+              Are you sure you have sent the correct amount of {cryptoAmount}{" "}
+              {selectedChain.split("/")[0].toUpperCase()}
+              to the deposit address? Once confirmed, we will start monitoring for your transaction.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Not Yet</AlertDialogCancel>
-            <AlertDialogAction onClick={handlePaidClick}>Yes, I've Sent It</AlertDialogAction>
+            <AlertDialogCancel onClick={() => setShowPaidConfirmation(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handlePaidClick}>Yes, I Have Sent Payment</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {/* </CHANGE> */}
     </Card>
   )
 }
 
+// </CHANGE> Add default export at the end of the file
 export default PaymentWidget

@@ -132,6 +132,7 @@ export async function POST(request: NextRequest) {
       expiresAt: shift.expiresAt,
       depositMin: shift.depositMin,
       depositMax: shift.depositMax,
+      shiftId: shift.id,
     })
   } catch (error: any) {
     console.error("[v0] Select chain error:", error)

@@ -326,6 +326,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         : null,
       created_at: session.created_at,
       expires_at: session.expires_at,
+      success_url: merchantInfo.success_url,
+      cancel_url: merchantInfo.cancel_url,
     })
   } catch (error) {
     console.error("[v0] Widget status error:", error)
