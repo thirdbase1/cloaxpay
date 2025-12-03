@@ -153,7 +153,6 @@ export function PaymentWidget({
     const s = seconds % 60
     return `${m}:${s.toString().padStart(2, "0")}`
   }
-  // </CHANGE>
   // </CHANGE> Start - Moved this useEffect to be after the formatters
   useEffect(() => {
     if (!shiftCreatedAt) return
