@@ -80,7 +80,6 @@ export function PaymentWidget({
   const [timeLeft, setTimeLeft] = useState(600) // 10 minutes in seconds
   const [shiftCreatedAt, setShiftCreatedAt] = useState<number | null>(null)
   const [cancelAvailableIn, setCancelAvailableIn] = useState<number>(0)
-  // </CHANGE>
   const [sessionExpired, setSessionExpired] = useState(false)
   const [hasClickedPaid, setHasClickedPaid] = useState(false)
   const [cryptoAmount, setCryptoAmount] = useState<string>("")
@@ -153,7 +152,7 @@ export function PaymentWidget({
     const s = seconds % 60
     return `${m}:${s.toString().padStart(2, "0")}`
   }
-  // </CHANGE> Start - Moved this useEffect to be after the formatters
+
   useEffect(() => {
     if (!shiftCreatedAt) return
 
@@ -168,7 +167,6 @@ export function PaymentWidget({
 
     return () => clearInterval(interval)
   }, [shiftCreatedAt])
-  // </CHANGE>
 
   const needsMemo = () => {
     if (!selectedChain) return false
@@ -403,7 +401,6 @@ export function PaymentWidget({
           const remaining = Math.max(0, Math.floor((expiresTime - now) / 1000))
           setTimeLeft(remaining)
         }
-        // </CHANGE> Start - Polling logic unchanged, but context moved
       } catch (error) {
         console.error("[v0] Status poll failed:", error)
       }
@@ -414,23 +411,6 @@ export function PaymentWidget({
 
     return () => clearInterval(pollInterval)
   }, [sessionData, depositAddress, sessionId, status, merchantBranding.successUrl])
-
-  // Moved this useEffect to be after the formatters
-  // useEffect(() => {
-  //   if (!shiftCreatedAt) return
-
-  //   const updateCancelTimer = () => {
-  //     const elapsed = Math.floor((Date.now() - shiftCreatedAt) / 1000)
-  //     const remaining = Math.max(0, 300 - elapsed) // 300 seconds = 5 minutes
-  //     setCancelAvailableIn(remaining)
-  //   }
-
-  //   updateCancelTimer()
-  //   const interval = setInterval(updateCancelTimer, 1000)
-
-  //   return () => clearInterval(interval)
-  // }, [shiftCreatedAt])
-  // </CHANGE>
 
   useEffect(() => {
     const savedState = localStorage.getItem(`payment_${sessionId}`)
@@ -825,7 +805,6 @@ export function PaymentWidget({
     }
   }
 
-  // </CHANGE> Start - Replaced handleHaveSent with handlePaidClick
   async function handlePaidClick() {
     setShowPaidConfirmation(false)
     setHasClickedPaid(true)
@@ -898,7 +877,6 @@ export function PaymentWidget({
       setIsChecking(false)
     }
   }
-  // </CHANGE>
 
   async function handleCancel() {
     if (!confirm("Are you sure you want to cancel this payment?")) return
@@ -950,7 +928,6 @@ export function PaymentWidget({
       setIsCancelling(false)
     }
   }
-  // </CHANGE>
 
   const isFinalStatus = ["completed", "cancelled", "expired", "failed", "refunded"].includes(status)
 
@@ -1117,7 +1094,6 @@ export function PaymentWidget({
       </Button>
     )
   }
-  // </CHANGE>
 
   const filteredChains = chains.filter((chain) => {
     if (!chainSearch) return true
@@ -1417,5 +1393,4 @@ export function PaymentWidget({
   )
 }
 
-// </CHANGE> Add default export at the end of the file
 export default PaymentWidget
