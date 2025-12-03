@@ -46,18 +46,18 @@ export default async function PayPage({ params }: PageProps) {
       .eq("id", session.merchant_id)
       .maybeSingle()
 
-    const sessionWithMerchant = {
-      ...session,
-      merchant_profiles: merchant || {
-        business_name: "Merchant",
-        email: "support@merchant.com",
-        webhook_url: null,
-      },
-    }
-
     return (
       <div className="min-h-screen bg-gradient-to-br from-sky-100 via-white to-blue-50 flex items-center justify-center p-2 sm:p-4">
-        <PaymentWidget session={sessionWithMerchant} />
+        <PaymentWidget
+          sessionId={session.session_id}
+          initialAmount={session.amount}
+          initialCurrency={session.currency}
+          merchantName={merchant?.business_name || "Merchant"}
+          merchantEmail={merchant?.email || "support@merchant.com"}
+          initialStatus={session.status}
+          expiresAt={session.expires_at}
+          createdAt={session.created_at}
+        />
       </div>
     )
   } catch (error) {
