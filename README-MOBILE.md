@@ -5,17 +5,18 @@ This project has been configured with **Capacitor** to allow it to run as a nati
 ## Quick Start (Download)
 
 You can download the APK from your live site:
-- **Link:** `https://cloaxpay.fogopulse.com/CloaxPay.apk`
+- **Link:** `https://cloaxpay.vercel.app/CloaxPay.apk`
 - **Local File:** `CloaxPay-debug.apk`
 
 ## How to use
 
-The app is configured as a **Web Wrapper** pointing to `https://cloaxpay.fogopulse.com`. This ensures 100% of the Next.js code works exactly as it does on the website while providing the safest and most reliable experience.
+The app is configured as a **Web Wrapper** pointing to `https://cloaxpay.vercel.app`. This ensures 100% of the Next.js code works exactly as it does on the website while providing the safest and most reliable experience.
 
 ### Configuration
 The app is set up in `capacitor.config.ts` with:
-- **Domain:** `https://cloaxpay.fogopulse.com`
+- **Domain:** `https://cloaxpay.vercel.app`
 - **Icon:** New multi-color CP gradient icon.
+- **UX:** Simplified "App-only" landing page with auto-fit layout.
 
 ### 2. Sync and Rebuild
 After changing the URL, run:
