@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">CloaxPay</string>
+    <string name="title_activity_main">CloaxPay</string>
+    <string name="package_name">com.cloaxpay.app</string>
+    <string name="custom_url_scheme">com.cloaxpay.app</string>
+</resources>

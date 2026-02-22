@@ -28,7 +28,10 @@ export const metadata: Metadata = {
     ],
     apple: "/apple-icon.png",
   },
-    generator: 'v0.app'
+  manifest: "/manifest.json",
+  themeColor: "#0ea5e9",
+  viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0",
+  generator: 'v0.app'
 }
 
 export default function RootLayout({
