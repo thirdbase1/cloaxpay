@@ -5,8 +5,7 @@ const config: CapacitorConfig = {
   appName: 'CloaxPay',
   webDir: 'out',
   server: {
-    // Change this to your actual production URL to keep everything 100% the same
-    url: 'https://cloaxpay.com',
+    url: 'https://cloaxpay.fogopulse.com',
     cleartext: true
   }
 };

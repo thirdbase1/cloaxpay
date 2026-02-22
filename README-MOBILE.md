@@ -4,25 +4,18 @@ This project has been configured with **Capacitor** to allow it to run as a nati
 
 ## Quick Start (Download)
 
-You can find the generated debug APK in the root directory:
-- **File:** `CloaxPay-debug.apk`
+You can download the APK from your live site:
+- **Link:** `https://cloaxpay.fogopulse.com/CloaxPay.apk`
+- **Local File:** `CloaxPay-debug.apk`
 
 ## How to use
 
-The app is currently configured as a **Web Wrapper** to ensure that 100% of the Next.js code (including Server Components, API routes, and Middleware) works exactly as it does on the website.
+The app is configured as a **Web Wrapper** pointing to `https://cloaxpay.fogopulse.com`. This ensures 100% of the Next.js code works exactly as it does on the website while providing the safest and most reliable experience.
 
-### 1. Update your Website URL
-Open `capacitor.config.ts` and change the `server.url` to your actual production domain:
-
-```typescript
-const config: CapacitorConfig = {
-  // ...
-  server: {
-    url: 'https://your-production-domain.com', // Change this!
-    cleartext: true
-  }
-};
-```
+### Configuration
+The app is set up in `capacitor.config.ts` with:
+- **Domain:** `https://cloaxpay.fogopulse.com`
+- **Icon:** New multi-color CP gradient icon.
 
 ### 2. Sync and Rebuild
 After changing the URL, run:
