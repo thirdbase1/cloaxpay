@@ -2,6 +2,8 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
+import { PlatformProvider } from "@/components/platform-provider"
+import { MobileBottomNav } from "@/components/mobile-bottom-nav"
 import "./globals.css"
 
 const _geist = Geist({ subsets: ["latin"] })
@@ -42,7 +44,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`font-sans antialiased mobile-app-styles`}>
-        {children}
+        <PlatformProvider>
+          <div className="flex flex-col min-h-screen mobile-app-content-wrapper">
+            <main className="flex-1">
+              {children}
+            </main>
+            <MobileBottomNav />
+          </div>
+        </PlatformProvider>
         <Analytics />
       </body>
     </html>

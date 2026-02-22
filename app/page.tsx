@@ -12,7 +12,10 @@ export default async function HomePage({
   const isMobileApp = platform === "mobile"
 
   return (
-    <div className={`min-h-screen bg-background flex flex-col ${isMobileApp ? "p-4 justify-center" : ""}`}>
+    <div className={`min-h-screen bg-background flex flex-col ${isMobileApp ? "p-6 justify-center items-center overflow-hidden" : ""}`}>
+      {isMobileApp && (
+        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-background -z-10" />
+      )}
       {!isMobileApp && (
         <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
           <div className="container mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center max-w-7xl">
@@ -36,13 +39,13 @@ export default async function HomePage({
         <div className="container mx-auto px-4 sm:px-6 max-w-7xl relative">
           <div className="max-w-5xl mx-auto text-center space-y-6 sm:space-y-8">
             {isMobileApp && (
-              <div className="flex justify-center mb-6">
-                <div className="h-20 w-20 rounded-2xl bg-primary flex items-center justify-center text-primary-foreground font-bold text-3xl shadow-xl shadow-primary/20">
+              <div className="flex justify-center mb-8 animate-in zoom-in duration-500">
+                <div className="h-24 w-24 rounded-[28%] bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold text-4xl shadow-2xl shadow-blue-500/20">
                   CP
                 </div>
               </div>
             )}
-            <h1 className={`${isMobileApp ? "text-4xl" : "text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl"} font-bold tracking-tight text-balance animate-in fade-in slide-in-from-bottom-6 duration-700`}>
+            <h1 className={`${isMobileApp ? "text-5xl tracking-tighter" : "text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl"} font-bold tracking-tight text-balance animate-in fade-in slide-in-from-bottom-6 duration-700`}>
               Get Paid in
               <span className="text-primary"> Any Chain.</span>
               <br />
@@ -50,8 +53,8 @@ export default async function HomePage({
               <span className="text-primary"> Any Token.</span>
             </h1>
 
-            <p className={`${isMobileApp ? "text-base" : "text-base sm:text-lg md:text-xl lg:text-2xl"} text-muted-foreground max-w-3xl mx-auto text-balance leading-relaxed animate-in fade-in slide-in-from-bottom-6 duration-700 delay-100 px-2`}>
-              {isMobileApp ? "Accept 200+ cryptocurrencies across 40+ blockchains. Auto-converted and non-custodial." : "Your customers pay with 200+ cryptocurrencies across 40+ blockchains. We auto-convert and send it directly to your wallet in your preferred token. Zero fees. Truly decentralized. Non-custodial."}
+            <p className={`${isMobileApp ? "text-lg" : "text-base sm:text-lg md:text-xl lg:text-2xl"} text-muted-foreground max-w-3xl mx-auto text-balance leading-relaxed animate-in fade-in slide-in-from-bottom-6 duration-700 delay-100 px-2`}>
+              {isMobileApp ? "Accept 200+ cryptocurrencies across 40+ blockchains. Zero fees. Non-custodial." : "Your customers pay with 200+ cryptocurrencies across 40+ blockchains. We auto-convert and send it directly to your wallet in your preferred token. Zero fees. Truly decentralized. Non-custodial."}
             </p>
 
             {!isMobileApp && (
@@ -77,20 +80,20 @@ export default async function HomePage({
               </div>
             )}
 
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-stretch sm:items-center pt-8 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-300 max-w-md mx-auto sm:max-w-none">
+            <div className={`flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-stretch sm:items-center pt-8 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-300 max-w-md mx-auto sm:max-w-none ${isMobileApp ? "w-full px-4" : ""}`}>
               <Link href="/auth/sign-up" className="w-full sm:w-auto">
                 <Button
                   size="lg"
-                  className="w-full h-12 sm:h-14 px-6 sm:px-10 text-sm sm:text-base rounded-xl shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-all hover:scale-105"
+                  className={`w-full ${isMobileApp ? "h-16 text-lg rounded-2xl" : "h-12 sm:h-14"} px-6 sm:px-10 text-sm sm:text-base rounded-xl shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-all hover:scale-105`}
                 >
-                  Get Started <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
+                  Get Started <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
               <Link href="/auth/login" className="w-full sm:w-auto">
                 <Button
                   size="lg"
                   variant="outline"
-                  className="w-full h-12 sm:h-14 px-6 sm:px-10 text-sm sm:text-base rounded-xl bg-transparent hover:bg-primary/5"
+                  className={`w-full ${isMobileApp ? "h-16 text-lg rounded-2xl border-2" : "h-12 sm:h-14"} px-6 sm:px-10 text-sm sm:text-base rounded-xl bg-transparent hover:bg-primary/5`}
                 >
                   Login to Account
                 </Button>
