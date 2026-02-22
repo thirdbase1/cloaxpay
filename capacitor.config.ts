@@ -5,7 +5,8 @@ const config: CapacitorConfig = {
   appName: 'CloaxPay',
   webDir: 'out',
   server: {
-    url: 'https://cloaxpay.fogopulse.com',
+    // Append ?platform=mobile to detect app mode in Next.js
+    url: 'https://cloaxpay.fogopulse.com?platform=mobile',
     cleartext: true
   }
 };

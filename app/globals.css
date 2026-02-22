@@ -160,6 +160,22 @@
     transform: translateZ(0);
     will-change: transform;
   }
+
+  /* Native Mobile App Enhancements */
+  .mobile-app-styles {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    overflow-x: hidden;
+  }
+
+  /* Custom utility for safe area padding */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }
 
 /* Added utility classes for enhanced animations and security indicators */

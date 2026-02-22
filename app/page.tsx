@@ -3,10 +3,18 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { ArrowRight, Shield, Zap, Globe2, Lock, CheckCircle2, Wallet, Sparkles, RefreshCw, Layers } from "lucide-react"
 
-export default function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ platform?: string }>
+}) {
+  const { platform } = await searchParams
+  const isMobileApp = platform === "mobile"
+
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+    <div className={`min-h-screen bg-background flex flex-col ${isMobileApp ? "pb-safe" : ""}`}>
+      {!isMobileApp && (
+        <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <div className="container mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center max-w-7xl">
           <Link href="/" className="flex items-center gap-2 sm:gap-3 group">
             <div className="relative h-8 w-8 sm:h-10 sm:w-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm sm:text-base transition-transform group-hover:scale-105">
@@ -15,10 +23,11 @@ export default function HomePage() {
             <span className="font-bold text-lg sm:text-xl tracking-tight">CloaxPay</span>
           </Link>
         </div>
-      </header>
+        </header>
+      )}
 
       {/* Hero Section */}
-      <section className="relative py-16 sm:py-24 md:py-32 lg:py-40 overflow-hidden">
+      <section className={`relative ${isMobileApp ? "py-8" : "py-16 sm:py-24 md:py-32 lg:py-40"} overflow-hidden`}>
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:24px_24px] sm:bg-[size:32px_32px] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_0%,#000,transparent)]" />
 
         <div className="absolute top-1/4 left-1/4 w-64 h-64 sm:w-96 sm:h-96 bg-primary/20 rounded-full blur-3xl animate-pulse" />
@@ -86,7 +95,7 @@ export default function HomePage() {
       </section>
 
       {/* Features Section */}
-      <section id="features" className="py-16 sm:py-20 md:py-28 bg-muted/30">
+      <section id="features" className={`${isMobileApp ? "py-10" : "py-16 sm:py-20 md:py-28"} bg-muted/30`}>
         <div className="container mx-auto px-4 sm:px-6 max-w-7xl">
           <div className="text-center max-w-3xl mx-auto mb-12 sm:mb-16 space-y-3 sm:space-y-4">
             <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight text-balance">
@@ -191,7 +200,7 @@ export default function HomePage() {
       </section>
 
       {/* Developer Section */}
-      <section id="how-it-works" className="py-16 sm:py-20 md:py-28">
+      <section id="how-it-works" className={`${isMobileApp ? "py-10" : "py-16 sm:py-20 md:py-28"}`}>
         <div className="container mx-auto px-4 sm:px-6 max-w-7xl">
           <div className="grid lg:grid-cols-2 gap-8 sm:gap-10 lg:gap-16 items-center">
             <div className="space-y-4 sm:space-y-6 order-2 lg:order-1">
@@ -265,7 +274,7 @@ window.location.href = widget_url;`}
       </section>
 
       {/* CTA Section */}
-      <section className="py-16 sm:py-20 md:py-28 bg-muted/30">
+      <section className={`${isMobileApp ? "py-10 mb-8" : "py-16 sm:py-20 md:py-28"} bg-muted/30`}>
         <div className="container mx-auto px-4 sm:px-6 max-w-7xl">
           <Card className="relative overflow-hidden border-2 border-primary/20">
             <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-primary/5" />
@@ -308,62 +317,64 @@ window.location.href = widget_url;`}
         </div>
       </section>
 
-      <footer className="border-t bg-muted/20 py-8 sm:py-10 mt-auto">
-        <div className="container mx-auto px-4 sm:px-6 max-w-7xl">
-          <div className="flex flex-col items-start gap-6">
-            {/* Logo - left aligned */}
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-xl bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
-                CP
+      {!isMobileApp && (
+        <footer className="border-t bg-muted/20 py-8 sm:py-10 mt-auto">
+          <div className="container mx-auto px-4 sm:px-6 max-w-7xl">
+            <div className="flex flex-col items-start gap-6">
+              {/* Logo - left aligned */}
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-xl bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
+                  CP
+                </div>
+                <span className="font-bold text-base">CloaxPay</span>
               </div>
-              <span className="font-bold text-base">CloaxPay</span>
-            </div>
 
-            {/* Links stacked vertically - left aligned */}
-            <nav className="flex flex-col items-start gap-2 text-sm">
-              <Link
-                href="/dashboard/integration"
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Integration Guide
-              </Link>
-              <Link
-                href="/dashboard/try-widget"
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Live Demo
-              </Link>
-              <Link href="/explorer" className="text-muted-foreground hover:text-foreground transition-colors">
-                Explorer
-              </Link>
-              <Link href="/privacy" className="text-muted-foreground hover:text-foreground transition-colors">
-                Privacy Policy
-              </Link>
-              <Link href="/terms" className="text-muted-foreground hover:text-foreground transition-colors">
-                Terms of Service
-              </Link>
-              <Link href="/cookies" className="text-muted-foreground hover:text-foreground transition-colors">
-                Cookie Policy
-              </Link>
-            </nav>
-
-            <div className="w-full pt-6 border-t border-muted text-center space-y-1">
-              <p className="text-sm text-muted-foreground">
-                Powered by{" "}
-                <a
-                  href="https://sideshift.ai"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline hover:text-foreground"
+              {/* Links stacked vertically - left aligned */}
+              <nav className="flex flex-col items-start gap-2 text-sm">
+                <Link
+                  href="/dashboard/integration"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  SideShift.ai
-                </a>
-              </p>
-              <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} CloaxPay</p>
+                  Integration Guide
+                </Link>
+                <Link
+                  href="/dashboard/try-widget"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Live Demo
+                </Link>
+                <Link href="/explorer" className="text-muted-foreground hover:text-foreground transition-colors">
+                  Explorer
+                </Link>
+                <Link href="/privacy" className="text-muted-foreground hover:text-foreground transition-colors">
+                  Privacy Policy
+                </Link>
+                <Link href="/terms" className="text-muted-foreground hover:text-foreground transition-colors">
+                  Terms of Service
+                </Link>
+                <Link href="/cookies" className="text-muted-foreground hover:text-foreground transition-colors">
+                  Cookie Policy
+                </Link>
+              </nav>
+
+              <div className="w-full pt-6 border-t border-muted text-center space-y-1">
+                <p className="text-sm text-muted-foreground">
+                  Powered by{" "}
+                  <a
+                    href="https://sideshift.ai"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-foreground"
+                  >
+                    SideShift.ai
+                  </a>
+                </p>
+                <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} CloaxPay</p>
+              </div>
             </div>
           </div>
-        </div>
-      </footer>
+        </footer>
+      )}
     </div>
   )
 }
