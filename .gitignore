@@ -1,0 +1,13 @@
+node_modules
+.next
+out
+dist
+*.log
+.env*
+capacitor-cordova-android
+ios
+www
+android/.gradle
+android/app/build
+android/build
+# *.apk
